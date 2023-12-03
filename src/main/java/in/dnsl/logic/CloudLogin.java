@@ -2,7 +2,6 @@ package in.dnsl.logic;
 
 
 import com.fasterxml.jackson.databind.JsonNode;
-import in.dnsl.constant.ApiConstant;
 import in.dnsl.domain.dto.AccessTokenDTO;
 import in.dnsl.domain.dto.Params;
 import in.dnsl.domain.dto.SessionDTO;
@@ -11,7 +10,9 @@ import in.dnsl.utils.*;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import me.kuku.utils.OkHttpUtils;
+import me.kuku.utils.OkUtils;
 import okhttp3.Headers;
+import okhttp3.Response;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -21,9 +22,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static in.dnsl.constant.ApiConstant.API_URL;
+import static in.dnsl.constant.ApiConstant.WEB_URL;
 import static in.dnsl.utils.ApiUtils.PcClientInfoSuffixParam;
 import static in.dnsl.utils.ApiUtils.uuidUpper;
-import static in.dnsl.utils.StringGenerator.*;
+import static in.dnsl.utils.StringGenerator.uuidDash;
 
 @Slf4j
 public class CloudLogin {
@@ -89,12 +91,11 @@ public class CloudLogin {
         log.info("获取到的Ssk: {}", sskJson);
         AccessTokenDTO accessTokenDTO = JsonUtils.jsonToObject(sskJson.toString(), AccessTokenDTO.class);
         sessionDTO.setAccessTokenDTO(accessTokenDTO);
-        //刷新token
-        getSessionByAccessToken(sessionDTO.getAccessToken());
+        System.out.print(getSessionBySessionKey(sessionDTO.getSessionKey()));
     }
 
     // 通过Token刷新Session
-    public static void getSessionByAccessToken(String accessToken){
+    public static UserSession getSessionByAccessToken(String accessToken){
         // 生成uuid 和 clientSn
         String fullUrl = "%s/getSessionForPC.action?appId=%s&accessToken=%s&clientSn=%s&%s";
         fullUrl = String.format(fullUrl, API_URL, "8025431004", accessToken, uuidDash(), PcClientInfoSuffixParam());
@@ -102,13 +103,24 @@ public class CloudLogin {
         // xml 转 对象
         UserSession userSession = XmlUtils.xmlToObject(xmlData, UserSession.class);
         log.info("通过Token获取到的Session: {}", userSession);
+        return userSession;
     }
 
+    // 通过SessionKey刷新Session
+    public static String getSessionBySessionKey(String sessionKey){
+        String fullUrl = "%s/ssoLogin.action?sessionKey=%s&redirectUrl=main.action%%23recycle";
+        fullUrl = String.format(fullUrl, WEB_URL, sessionKey);
+        Response response = OkHttpUtils.get(fullUrl, Headers.of("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8,ja;q=0.7"));
+        String cookie = OkUtils.cookie(response);
+        log.info("通过SessionKey获取到的Cookie: {}", cookie);
+        // 有两个 COOKIE_LOGIN_USER 我取的是最后面的 我也不知道为什么会返回两个
+        return cookie.split("COOKIE_LOGIN_USER=")[2].split(";")[0];
+    }
 
     @SneakyThrows
     private static Params getLoginParams() {
         String fullUrl = "%s/unifyLoginForPC.action?appId=%s&clientType=%s&returnURL=%s&timeStamp=%d";
-        fullUrl = String.format(fullUrl, ApiConstant.WEB_URL, "8025431004", "10020", "https://m.cloud.189.cn/zhuanti/2020/loginErrorPc/index.html", System.currentTimeMillis());
+        fullUrl = String.format(fullUrl, WEB_URL, "8025431004", "10020", "https://m.cloud.189.cn/zhuanti/2020/loginErrorPc/index.html", System.currentTimeMillis());
         log.info("请求API Params-->: {}", fullUrl);
         String content = OkHttpUtils.getStr(fullUrl, Headers.of("Content-Type", "application/x-www-form-urlencoded"));
         // 通过正则表达式获取参数
