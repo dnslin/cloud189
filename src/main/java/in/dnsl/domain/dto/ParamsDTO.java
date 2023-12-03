@@ -3,7 +3,7 @@ package in.dnsl.domain.dto;
 import lombok.Data;
 
 @Data
-public class Params {
+public class ParamsDTO {
 
     public String captchaToken;
 
