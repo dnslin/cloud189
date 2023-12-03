@@ -1,9 +1,14 @@
 package in.dnsl.logic;
 
 import in.dnsl.domain.dto.SessionDTO;
-import in.dnsl.utils.ApiUtils;
+import in.dnsl.domain.result.UserSignResult;
+import in.dnsl.utils.SignatureUtils;
+import in.dnsl.utils.XmlUtils;
 import lombok.extern.slf4j.Slf4j;
+import me.kuku.utils.OkHttpUtils;
+import okhttp3.Headers;
 
+import java.util.HashMap;
 import java.util.Map;
 
 import static in.dnsl.constant.ApiConstant.API_URL;
@@ -20,9 +25,12 @@ public class UserSign {
         Map<String,String> headers = Map.ofEntries(
                 Map.entry("Date", dateOfGmtStr()),
                 Map.entry("SessionKey",dto.getSessionKey()),
-                Map.entry("Signature", ApiUtils.SignatureOfHmac(dto.getSessionSecret(),dto.getSessionKey(),"GET",fullUrl,dateOfGmtStr())),
+                Map.entry("Signature", SignatureUtils.signatureOfHmac(dto.getSessionSecret(),dto.getSessionKey(),"POST",fullUrl,dateOfGmtStr())),
                 Map.entry("X-Request-ID", uuidUpper()),
                 Map.entry("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 13_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Ecloud/8.9.4 (iPhone; " + uuidDash() + "; appStore) iOS/13.7")
         );
+        String xmlData = OkHttpUtils.postStr(fullUrl, new HashMap<>(),Headers.of(headers));
+        UserSignResult userSignResult = XmlUtils.xmlToObject(xmlData, UserSignResult.class);
+        log.info("{}", userSignResult);
     }
 }

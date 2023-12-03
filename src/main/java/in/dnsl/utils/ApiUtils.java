@@ -31,7 +31,5 @@ public class ApiUtils {
         System.out.println(s);
     }
 
-    public static String SignatureOfHmac(String sessionSecret, String sessionKey, String get, String fullUrl, String s) {
-        return null;
-    }
+
 }

@@ -1,6 +1,5 @@
 package in.dnsl.config;
 
-import in.dnsl.utils.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.Cookie;
 import okhttp3.CookieJar;
@@ -20,12 +19,10 @@ public class SimpleCookieJar implements CookieJar {
     @Override
     public @NotNull List<Cookie> loadForRequest(HttpUrl url) {
         List<Cookie> cookies = cookieStore.get(url.host());
-        log.info("loadForRequest: url={},cookie={}", url, JsonUtils.objectToJson(cookies));
         return cookies != null ? cookies : new ArrayList<>();
     }
 
     public static void setGlobalCookie(@NotNull String url, @NotNull String cookie) {
-        log.info("setGlobalCookie: url={}, cookie={}", url, cookie);
         HttpUrl httpUrl = HttpUrl.parse(url);
         Cookie cookies = new Cookie.Builder()
                 .name("COOKIE_LOGIN_USER")

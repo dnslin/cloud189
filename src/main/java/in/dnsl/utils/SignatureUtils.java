@@ -1,5 +1,12 @@
 package in.dnsl.utils;
 
+import lombok.SneakyThrows;
+
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.security.InvalidKeyException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -39,5 +46,25 @@ public class SignatureUtils {
         }
         return hexString.toString();
     }
+
+    @SneakyThrows
+    public static String signatureOfHmac(String secretKey, String sessionKey, String operate, String urlString, String dateOfGmt) {
+        try {
+            URI url = new URI(urlString);
+            String requestUri = url.getPath();
+
+            String plainStr = String.format("SessionKey=%s&Operate=%s&RequestURI=%s&Date=%s",
+                    sessionKey, operate, requestUri, dateOfGmt);
+
+            SecretKeySpec keySpec = new SecretKeySpec(secretKey.getBytes(StandardCharsets.UTF_8), "HmacSHA1");
+            Mac mac = Mac.getInstance("HmacSHA1");
+            mac.init(keySpec);
+            byte[] result = mac.doFinal(plainStr.getBytes(StandardCharsets.UTF_8));
+            return bytesToHex(result).toUpperCase();
+        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
+            throw new RuntimeException("Error while calculating HMAC", e);
+        }
+    }
+
 }
 
