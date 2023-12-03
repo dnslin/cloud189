@@ -2,8 +2,9 @@ package in.dnsl.logic;
 
 
 import com.fasterxml.jackson.databind.JsonNode;
+import in.dnsl.config.SimpleCookieJar;
 import in.dnsl.domain.dto.AccessTokenDTO;
-import in.dnsl.domain.dto.Params;
+import in.dnsl.domain.dto.ParamsDTO;
 import in.dnsl.domain.dto.SessionDTO;
 import in.dnsl.domain.xml.UserSession;
 import in.dnsl.utils.*;
@@ -12,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import me.kuku.utils.OkHttpUtils;
 import me.kuku.utils.OkUtils;
 import okhttp3.Headers;
+import okhttp3.HttpUrl;
 import okhttp3.Response;
 
 import java.net.URLEncoder;
@@ -35,9 +37,10 @@ public class CloudLogin {
     }
 
 
-    public static void login(String username, String password) {
+    public static SessionDTO login(String username, String password) {
+        HttpUrl url = HttpUrl.parse(WEB_URL);
         String loginUrl = "https://open.e.189.cn/api/logbox/oauth2/loginSubmit.do";
-        Params loginParams = getLoginParams();
+        ParamsDTO loginParamsDTO = getLoginParams();
         // 构建请求参数 rsa加密账号密码 注意Base64转hex方法
         Map<String, String> params = Map.ofEntries(
                 Map.entry("appKey", "8025431004"),
@@ -45,23 +48,23 @@ public class CloudLogin {
                 Map.entry("userName", "{RSA}" + RSAEncryption.rsaEncode(username)),
                 Map.entry("password", "{RSA}" + RSAEncryption.rsaEncode(password)),
                 Map.entry("validateCode", ""),
-                Map.entry("captchaToken", loginParams.captchaToken),
-                Map.entry("returnUrl", loginParams.returnUrl),
+                Map.entry("captchaToken", loginParamsDTO.captchaToken),
+                Map.entry("returnUrl", loginParamsDTO.returnUrl),
                 Map.entry("mailSuffix", "@189.cn"),
                 Map.entry("dynamicCheck", "FALSE"),
                 Map.entry("clientType", "10020"),
                 Map.entry("cb_SaveName", "1"),
                 Map.entry("isOauth2", "false"),
                 Map.entry("state", ""),
-                Map.entry("paramId", loginParams.paramId));
+                Map.entry("paramId", loginParamsDTO.paramId));
         // 构建请求头
         Map<String, String> headers = Map.ofEntries(
                 Map.entry("Content-Type", "application/x-www-form-urlencoded"),
                 Map.entry("Referer", "https://open.e.189.cn/api/logbox/oauth2/unifyAccountLogin.do"),
-                Map.entry("Cookie", "LT=" + loginParams.lt),
+                Map.entry("Cookie", "LT=" + loginParamsDTO.lt),
                 Map.entry("X-Requested-With", "XMLHttpRequest"),
-                Map.entry("REQID", loginParams.reqId),
-                Map.entry("lt", loginParams.lt));
+                Map.entry("REQID", loginParamsDTO.reqId),
+                Map.entry("lt", loginParamsDTO.lt));
         JsonNode data = OkHttpUtils.postJson(loginUrl, params, Headers.of(headers));
         // 判断是否登录成功
         if ("登录成功".equals(data.get("msg").asText())) log.info("登录时间->{},登录成功", LocalDateTime.now());
@@ -91,7 +94,10 @@ public class CloudLogin {
         log.info("获取到的Ssk: {}", sskJson);
         AccessTokenDTO accessTokenDTO = JsonUtils.jsonToObject(sskJson.toString(), AccessTokenDTO.class);
         sessionDTO.setAccessTokenDTO(accessTokenDTO);
-        System.out.print(getSessionBySessionKey(sessionDTO.getSessionKey()));
+        String cookie = getSessionBySessionKey(sessionDTO.getSessionKey());
+        // 设置cookie到OkHttpUtils中 用于后续请求
+        SimpleCookieJar.setGlobalCookie(API_URL, cookie);
+        return sessionDTO;
     }
 
     // 通过Token刷新Session
@@ -118,7 +124,7 @@ public class CloudLogin {
     }
 
     @SneakyThrows
-    private static Params getLoginParams() {
+    private static ParamsDTO getLoginParams() {
         String fullUrl = "%s/unifyLoginForPC.action?appId=%s&clientType=%s&returnURL=%s&timeStamp=%d";
         fullUrl = String.format(fullUrl, WEB_URL, "8025431004", "10020", "https://m.cloud.189.cn/zhuanti/2020/loginErrorPc/index.html", System.currentTimeMillis());
         log.info("请求API Params-->: {}", fullUrl);
@@ -128,36 +134,36 @@ public class CloudLogin {
     }
 
 
-    private static Params extractParams(String content) {
-        Params params = new Params();
+    private static ParamsDTO extractParams(String content) {
+        ParamsDTO paramsDTO = new ParamsDTO();
         Pattern pattern;
         Matcher matcher;
         pattern = Pattern.compile("captchaToken' value='(.+?)'");
         matcher = pattern.matcher(content);
 
-        if (matcher.find()) params.captchaToken = matcher.group(1);
+        if (matcher.find()) paramsDTO.captchaToken = matcher.group(1);
         pattern = Pattern.compile("lt = \"(.+?)\"");
         matcher = pattern.matcher(content);
 
-        if (matcher.find()) params.lt = matcher.group(1);
+        if (matcher.find()) paramsDTO.lt = matcher.group(1);
         pattern = Pattern.compile("returnUrl = '(.+?)'");
         matcher = pattern.matcher(content);
 
-        if (matcher.find()) params.returnUrl = matcher.group(1);
+        if (matcher.find()) paramsDTO.returnUrl = matcher.group(1);
         pattern = Pattern.compile("paramId = \"(.+?)\"");
         matcher = pattern.matcher(content);
 
-        if (matcher.find()) params.paramId = matcher.group(1);
+        if (matcher.find()) paramsDTO.paramId = matcher.group(1);
         pattern = Pattern.compile("reqId = \"(.+?)\"");
         matcher = pattern.matcher(content);
 
-        if (matcher.find()) params.reqId = matcher.group(1);
+        if (matcher.find()) paramsDTO.reqId = matcher.group(1);
         pattern = Pattern.compile("j_rsaKey\" value=\"(.+?)\"");
         matcher = pattern.matcher(content);
 
-        if (matcher.find()) params.jRsaKey = matcher.group(1);
-        log.info("获取到的参数: {}", params);
-        return params;
+        if (matcher.find()) paramsDTO.jRsaKey = matcher.group(1);
+        log.info("获取到的参数: {}", paramsDTO);
+        return paramsDTO;
     }
 
 

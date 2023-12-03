@@ -36,13 +36,13 @@ public class JsonUtils {
 
     // JSON转Map
     public static Map<String, Object> jsonToMap(String json) {
-        return handleJsonOperation(() -> objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {
+        return handleJsonOperation(() -> objectMapper.readValue(json, new TypeReference<>() {
         }));
     }
 
     // 对象转Map
     public static Map<String, Object> objectToMap(Object obj) {
-        return handleJsonOperation(() -> objectMapper.convertValue(obj, new TypeReference<Map<String, Object>>() {
+        return handleJsonOperation(() -> objectMapper.convertValue(obj, new TypeReference<>() {
         }));
     }
 
