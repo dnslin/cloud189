@@ -1,5 +1,9 @@
 package in.dnsl.utils;
 
+import lombok.SneakyThrows;
+
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -24,6 +28,12 @@ public class ApiUtils {
         dateFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
         Date currentDate = new Date();
         return dateFormat.format(currentDate);
+    }
+
+    // URL编码
+    @SneakyThrows
+    public static String urlEncode(String original) {
+        return URLEncoder.encode(original, StandardCharsets.UTF_8);
     }
 
     public static void main(String[] args) {

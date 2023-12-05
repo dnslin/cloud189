@@ -15,6 +15,7 @@ import me.kuku.utils.OkUtils;
 import okhttp3.Headers;
 import okhttp3.HttpUrl;
 import okhttp3.Response;
+import org.jetbrains.annotations.NotNull;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -37,7 +38,7 @@ public class CloudLogin {
     }
 
 
-    public static SessionDTO login(String username, String password) {
+    public static @NotNull SessionDTO login(String username, String password) {
         HttpUrl url = HttpUrl.parse(WEB_URL);
         String loginUrl = "https://open.e.189.cn/api/logbox/oauth2/loginSubmit.do";
         ParamsDTO loginParamsDTO = getLoginParams();
