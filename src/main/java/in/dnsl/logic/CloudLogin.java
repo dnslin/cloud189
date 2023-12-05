@@ -100,6 +100,7 @@ public class CloudLogin {
     }
 
     // 通过Token刷新Session
+    @Deprecated
     public static UserSession getSessionByAccessToken(String accessToken){
         // 生成uuid 和 clientSn
         String fullUrl = "%s/getSessionForPC.action?appId=%s&accessToken=%s&clientSn=%s&%s";
