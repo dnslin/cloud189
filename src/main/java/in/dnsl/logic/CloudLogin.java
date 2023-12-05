@@ -13,8 +13,8 @@ import lombok.extern.slf4j.Slf4j;
 import me.kuku.utils.OkHttpUtils;
 import me.kuku.utils.OkUtils;
 import okhttp3.Headers;
-import okhttp3.HttpUrl;
 import okhttp3.Response;
+import org.jetbrains.annotations.NotNull;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -36,9 +36,10 @@ public class CloudLogin {
         OkHttpUtils.setOkhttpClient(HttpClientSingleton.getInstance());
     }
 
+    // 单例模式提供 SessionDto对象
+    private static volatile SessionDTO sessionDTO;
 
-    public static SessionDTO login(String username, String password) {
-        HttpUrl url = HttpUrl.parse(WEB_URL);
+    public static @NotNull SessionDTO login(String username, String password) {
         String loginUrl = "https://open.e.189.cn/api/logbox/oauth2/loginSubmit.do";
         ParamsDTO loginParamsDTO = getLoginParams();
         // 构建请求参数 rsa加密账号密码 注意Base64转hex方法
@@ -73,13 +74,13 @@ public class CloudLogin {
         String fullUrl = "%s/getSessionForPC.action?clientType=%s&version=%s&channelId=%s&redirectURL=%s";
         fullUrl = String.format(fullUrl, API_URL, "TELEMAC", "1.0.0", "web_cloud.189.cn", URLEncoder.encode(data.get("toUrl").asText(), StandardCharsets.UTF_8));
         JsonNode json = OkHttpUtils.getJson(fullUrl, Headers.of("Accept", "application/json;charset=UTF-8"));
-        SessionDTO sessionDTO = JsonUtils.jsonToObject(json.toString(), SessionDTO.class);
+        sessionDTO = JsonUtils.jsonToObject(json.toString(), SessionDTO.class);
         log.info("获取到的Session: {}", JsonUtils.objectToJson(sessionDTO));
         // 获取Ssk token
         String sskUrl = "%s/open/oauth2/getAccessTokenBySsKey.action?sessionKey=%s";
         sskUrl = String.format(sskUrl, API_URL, sessionDTO.getSessionKey());
         // md5 加密参数
-        Map<String,String> signParams = Map.ofEntries(
+        Map<String, String> signParams = Map.ofEntries(
                 Map.entry("AppKey", "601102120"),
                 Map.entry("sessionKey", sessionDTO.getSessionKey()),
                 Map.entry("Timestamp", String.valueOf(System.currentTimeMillis())));
@@ -101,7 +102,8 @@ public class CloudLogin {
     }
 
     // 通过Token刷新Session
-    public static UserSession getSessionByAccessToken(String accessToken){
+    @Deprecated
+    public static UserSession getSessionByAccessToken(String accessToken) {
         // 生成uuid 和 clientSn
         String fullUrl = "%s/getSessionForPC.action?appId=%s&accessToken=%s&clientSn=%s&%s";
         fullUrl = String.format(fullUrl, API_URL, "8025431004", accessToken, uuidDash(), PcClientInfoSuffixParam());
@@ -113,7 +115,7 @@ public class CloudLogin {
     }
 
     // 通过SessionKey刷新Session
-    public static String getSessionBySessionKey(String sessionKey){
+    public static String getSessionBySessionKey(String sessionKey) {
         String fullUrl = "%s/ssoLogin.action?sessionKey=%s&redirectUrl=main.action%%23recycle";
         fullUrl = String.format(fullUrl, WEB_URL, sessionKey);
         Response response = OkHttpUtils.get(fullUrl, Headers.of("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8,ja;q=0.7"));
@@ -166,5 +168,9 @@ public class CloudLogin {
         return paramsDTO;
     }
 
+    public static synchronized SessionDTO getSession() {
+        if (sessionDTO == null) throw new RuntimeException("sessionDTO is null 用户未登录");
+        return sessionDTO;
+    }
 
 }

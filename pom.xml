@@ -45,7 +45,6 @@
     <repositories>
         <repository>
             <id>nexus</id>
-            <name>DnsLin Repository</name>
             <url>https://nexus.dnsl.in/repository/repository_group/</url>
         </repository>
     </repositories>
@@ -53,17 +52,6 @@
     <build>
         <finalName>${project.artifactId}</finalName>
     </build>
-
-    <pluginRepositories>
-        <pluginRepository>
-            <id>nexus</id>
-            <name>DnsLin Repository</name>
-            <url>https://nexus.dnsl.in/repository/repository_group/</url>
-            <snapshots>
-                <enabled>true</enabled>
-            </snapshots>
-        </pluginRepository>
-    </pluginRepositories>
 
     <developers>
         <developer>
