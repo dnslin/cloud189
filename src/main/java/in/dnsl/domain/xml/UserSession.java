@@ -8,7 +8,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @XStreamAlias("userSession")
 public class UserSession {
+
     private String loginName;
+
     private String sessionKey;
     
     private String sessionSecret;
