@@ -11,8 +11,8 @@ import okhttp3.Headers;
 
 import java.util.Map;
 
-import static in.dnsl.config.SessionConfig.getSession;
 import static in.dnsl.constant.ApiConstant.API_URL;
+import static in.dnsl.logic.CloudLogin.getSession;
 import static in.dnsl.utils.ApiUtils.*;
 import static in.dnsl.utils.SignatureUtils.signatureOfHmac;
 
