@@ -13,7 +13,6 @@ import lombok.extern.slf4j.Slf4j;
 import me.kuku.utils.OkHttpUtils;
 import me.kuku.utils.OkUtils;
 import okhttp3.Headers;
-import okhttp3.HttpUrl;
 import okhttp3.Response;
 import org.jetbrains.annotations.NotNull;
 
@@ -39,7 +38,6 @@ public class CloudLogin {
 
 
     public static @NotNull SessionDTO login(String username, String password) {
-        HttpUrl url = HttpUrl.parse(WEB_URL);
         String loginUrl = "https://open.e.189.cn/api/logbox/oauth2/loginSubmit.do";
         ParamsDTO loginParamsDTO = getLoginParams();
         // 构建请求参数 rsa加密账号密码 注意Base64转hex方法
