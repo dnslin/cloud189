@@ -16,7 +16,7 @@ public class ListFiles {
 
     @Getter
     @Setter
-    class FileList {
+    static class FileList {
         private int count;
 
         @XStreamImplicit(itemFieldName = "folder")

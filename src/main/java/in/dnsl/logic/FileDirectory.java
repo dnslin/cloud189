@@ -1,17 +1,23 @@
 package in.dnsl.logic;
 
+import in.dnsl.domain.req.AppFileListParam;
 import in.dnsl.domain.req.AppGetFileInfoParam;
 import in.dnsl.domain.xml.AppErrorXmlResp;
 import in.dnsl.domain.xml.AppGetFileInfoResult;
-import in.dnsl.utils.JsonUtils;
+import in.dnsl.domain.xml.ListFiles;
+import in.dnsl.enums.OrderEnums;
 import in.dnsl.utils.XmlUtils;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import me.kuku.utils.OkHttpUtils;
 import okhttp3.Headers;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static in.dnsl.constant.ApiConstant.API_URL;
+import static in.dnsl.constant.ApiConstant.rootNode;
 import static in.dnsl.logic.CloudLogin.getSession;
 import static in.dnsl.utils.ApiUtils.*;
 import static in.dnsl.utils.SignatureUtils.signatureOfHmac;
@@ -20,7 +26,7 @@ import static in.dnsl.utils.SignatureUtils.signatureOfHmac;
 public class FileDirectory {
 
     //根据文件ID或者文件绝对路径获取文件信息，支持文件和文件夹
-    public static void appGetBasicFileInfo(AppGetFileInfoParam build) {
+    public static AppGetFileInfoResult appGetBasicFileInfo(@NotNull AppGetFileInfoParam build) {
         var session = getSession();
         String sessionKey, sessionSecret, fullUrlPattern;
         Object[] formatArgs;
@@ -34,26 +40,90 @@ public class FileDirectory {
             // 家庭云逻辑
             sessionKey = session.getFamilySessionKey();
             sessionSecret = session.getFamilySessionSecret();
-            if (build.getFileId().isBlank()) throw new RuntimeException("FileId为空");
+            if (build.getFileId().isEmpty()) throw new RuntimeException("FileId为空");
             fullUrlPattern = "%s/family/file/getFolderInfo.action?familyId=%d&folderId=%s&folderPath=%s&pathList=0&%s";
             formatArgs = new Object[]{API_URL, build.getFamilyId(), build.getFileId(), urlEncode(build.getFilePath()), PcClientInfoSuffixParam()};
         }
-        var fullUrl = String.format(fullUrlPattern, formatArgs);
-        // 构建请求头 签名参数
-        Map<String,String> headers = Map.ofEntries(
-                Map.entry("Date", dateOfGmtStr()),
-                        Map.entry("SessionKey", sessionKey),
-                        Map.entry("Signature", signatureOfHmac(sessionSecret, sessionKey, "GET", fullUrl, dateOfGmtStr())),
-                        Map.entry("X-Request-ID", uuidUpper())
-                );
-        var xmlData = OkHttpUtils.getStr(fullUrl,Headers.of(headers));
+        var xmlData = send(fullUrlPattern,formatArgs,sessionKey, sessionSecret);
         if (xmlData.contains("error")) {
-            AppErrorXmlResp appErrorXmlResp = XmlUtils.xmlToObject(xmlData, AppErrorXmlResp.class);
+            var appErrorXmlResp = XmlUtils.xmlToObject(xmlData, AppErrorXmlResp.class);
             throw new RuntimeException("请求失败:"+appErrorXmlResp.getCode());
         }
-        AppGetFileInfoResult appGetFileInfoResult = XmlUtils.xmlToObject(xmlData, AppGetFileInfoResult.class);
-        log.info("{}", JsonUtils.objectToJson(appGetFileInfoResult));
+        return XmlUtils.xmlToObject(xmlData, AppGetFileInfoResult.class);
     }
 
+    // 获取指定目录下的所有文件列表
+    public static void appGetAllFileList(@NotNull AppFileListParam param){
+        if (param.getPageSize() <= 0) param.setPageSize(200);
+        // 如果 家庭id 大于 0 并且 文件id为 -11 则把文件ID设置为 空
+        if (param.getFamilyId() > 0 && param.getFileId().equals("-11")) param.setFileId("");
+
+    }
+
+    //获取文件列表
+    public static ListFiles appFileList(@NotNull AppFileListParam param){
+        Object[] formatArgs;
+        var session = getSession();
+        String sessionKey, sessionSecret, fullUrlPattern;
+        if (param.getFamilyId() <= 0){
+            sessionKey = session.getSessionKey();
+            sessionSecret = session.getSessionSecret();
+            fullUrlPattern = "%s/listFiles.action?folderId=%s&recursive=0&fileType=0&iconOption=10&mediaAttr=0&orderBy=%s&descending=%s&pageNum=%s&pageSize=%s&%s";
+            formatArgs = new Object[]{API_URL, param.getFileId(), OrderEnums.getByCode(param.getOrderBy()), false, param.getPageNum(), param.getPageSize(), PcClientInfoSuffixParam()};
+        }else {
+            // 家庭云
+            if (rootNode.equals(param.getFileId())) param.setFileId("");
+            sessionKey = session.getFamilySessionKey();
+            sessionSecret = session.getFamilySessionSecret();
+            fullUrlPattern = "%s/family/file/listFiles.action?folderId=%s&familyId=%s&fileType=0&iconOption=0&mediaAttr=0&orderBy=%s&descending=%s&pageNum=%d&pageSize=%d&%s";
+            formatArgs = new Object[]{API_URL, param.getFileId(), param.getFamilyId(), OrderEnums.getByCode(param.getOrderBy()), false, param.getPageNum(), param.getPageSize(), PcClientInfoSuffixParam()};
+        }
+        var send = send(fullUrlPattern, formatArgs, sessionKey, sessionSecret);
+        return XmlUtils.xmlToObject(send, ListFiles.class);
+    }
+
+    // 通过FileId获取文件的绝对路径
+    @SneakyThrows
+    public static String appFilePathById(Integer familyId, String fileId){
+        var fullPath = "";
+        var param = AppGetFileInfoParam.builder()
+                .familyId(familyId)
+                .fileId(fileId).build();
+        while (true) {
+            var fi = appGetBasicFileInfo(param);
+            if (fi == null) throw new RuntimeException("FileInfo is null");
+            if (!fi.getPath().isEmpty()) {
+                return fi.getPath();
+            }
+            if (fi.getId().startsWith("-") || fi.getParentFolderId().startsWith("-")) {
+                fullPath = "/" + fullPath;
+                break;
+            }
+            fullPath = fullPath.isEmpty() ? fi.getName() : fi.getName() + "/" + fullPath;
+
+            param = AppGetFileInfoParam.builder()
+                    .fileId(fi.getParentFolderId()).build();
+            TimeUnit.MILLISECONDS.sleep(100);
+        }
+        return fullPath;
+    }
+
+    // 通过FileId获取文件详情
+    public static void appFileInfoById(Integer familyId, String fileId){
+        var param = AppGetFileInfoParam.builder()
+                .familyId(familyId)
+                .fileId(fileId).build();
+        var result = appGetBasicFileInfo(param);
+
+    }
+
+    private static String send(String fullUrlPattern, Object[] formatArgs, String sessionKey, String sessionSecret) {
+        var fullUrl = String.format(fullUrlPattern, formatArgs);
+        var headers = Map.ofEntries(Map.entry("Date", dateOfGmtStr()),
+                Map.entry("SessionKey", sessionKey),
+                Map.entry("Signature", signatureOfHmac(sessionSecret, sessionKey, "GET", fullUrl, dateOfGmtStr())),
+                Map.entry("X-Request-ID", uuidUpper()));
+        return OkHttpUtils.getStr(fullUrl, Headers.of(headers));
+    }
 
 }
