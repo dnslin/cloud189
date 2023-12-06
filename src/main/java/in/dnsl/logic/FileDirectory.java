@@ -2,10 +2,13 @@ package in.dnsl.logic;
 
 import in.dnsl.domain.req.AppFileListParam;
 import in.dnsl.domain.req.AppGetFileInfoParam;
+import in.dnsl.domain.result.AppFileEntity;
+import in.dnsl.domain.result.AppFileListResult;
 import in.dnsl.domain.xml.AppErrorXmlResp;
 import in.dnsl.domain.xml.AppGetFileInfoResult;
 import in.dnsl.domain.xml.ListFiles;
 import in.dnsl.enums.OrderEnums;
+import in.dnsl.utils.JsonUtils;
 import in.dnsl.utils.XmlUtils;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -13,8 +16,10 @@ import me.kuku.utils.OkHttpUtils;
 import okhttp3.Headers;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static in.dnsl.constant.ApiConstant.API_URL;
 import static in.dnsl.constant.ApiConstant.rootNode;
@@ -53,11 +58,47 @@ public class FileDirectory {
     }
 
     // 获取指定目录下的所有文件列表
+    @SneakyThrows
     public static void appGetAllFileList(@NotNull AppFileListParam param){
         if (param.getPageSize() <= 0) param.setPageSize(200);
         // 如果 家庭id 大于 0 并且 文件id为 -11 则把文件ID设置为 空
         if (param.getFamilyId() > 0 && param.getFileId().equals("-11")) param.setFileId("");
+        var files = appFileList(param);
+        var build = AppFileListResult.builder()
+                .lastRev(files.getLastRev())
+                .count(files.getFileList().getFile().size())
+                .fileList(convert(files.getFileList().getFile())).build();
+        if (build.getCount() > param.getPageSize()){
+            // 如果文件数量大于每页数量，则递归获取
+            var pageNum = param.getPageNum();
+            var pageSize = param.getPageSize();
+            var totalPage = (int) Math.ceil((double) build.getCount() / pageSize);
+            for (int i = 1; i < totalPage; i++) {
+                param.setPageNum(++pageNum);
+                var fileList = appFileList(param);
+                build.getFileList().addAll(convert(fileList.getFileList().getFile()));
+                TimeUnit.MILLISECONDS.sleep(100);
+            }
+        }
+        // 替换
+        build.getFileList().forEach(e-> e.setParentId(param.getFileId()));
+        // construct path
+        log.info("{}", JsonUtils.objectToJson(build));
+    }
 
+    // 转换实体
+    private static List<AppFileEntity> convert( List<ListFiles.File> file){
+        return file.stream().map(e -> AppFileEntity.builder()
+                .fileId(e.getId())
+                .fileName(e.getName())
+                .fileSize(e.getSize())
+                .fileMd5(e.getMd5())
+                .startLabel(e.getStarLabel())
+                .fileCata(e.getFileCata())
+                .lastOpTime(e.getLastOpTime())
+                .createTime(e.getCreateDate())
+                .mediaType(e.getMediaType())
+                .rev(e.getRev()).build()).collect(Collectors.toList());
     }
 
     //获取文件列表

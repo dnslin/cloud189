@@ -16,7 +16,7 @@ public class ListFiles {
 
     @Getter
     @Setter
-    static class FileList {
+    public static class FileList {
         private int count;
 
         @XStreamImplicit(itemFieldName = "folder")
@@ -29,7 +29,7 @@ public class ListFiles {
     @XStreamAlias("folder")
     @Getter
     @Setter
-    static class Folder {
+    public static class Folder {
         private String id;
         private String parentId;
         private String name;
@@ -44,7 +44,7 @@ public class ListFiles {
     @XStreamAlias("file")
     @Getter
     @Setter
-    static class File {
+    public static class File {
         private String id;
         private String name;
         private long size;
