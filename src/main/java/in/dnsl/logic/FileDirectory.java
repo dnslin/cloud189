@@ -16,7 +16,6 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -48,34 +47,34 @@ public class FileDirectory {
             fullUrlPattern = "%s/family/file/getFolderInfo.action?familyId=%d&folderId=%s&folderPath=%s&pathList=0&%s";
             formatArgs = new Object[]{API_URL, build.getFamilyId(), build.getFileId(), urlEncode(build.getFilePath()), PcClientInfoSuffixParam()};
         }
-        var xmlData = send(fullUrlPattern,formatArgs,sessionKey, sessionSecret);
+        var xmlData = send(fullUrlPattern, formatArgs, sessionKey, sessionSecret);
         if (xmlData.contains("error")) {
             var appErrorXmlResp = XmlUtils.xmlToObject(xmlData, AppErrorXmlResp.class);
-            throw new RuntimeException("请求失败:"+appErrorXmlResp.getCode());
+            throw new RuntimeException("请求失败:" + appErrorXmlResp.getCode());
         }
         return XmlUtils.xmlToObject(xmlData, AppGetFileInfoResult.class);
     }
 
     // 获取指定目录下的所有文件列表
     @SneakyThrows
-    public static ListFiles appGetAllFileList(@NotNull AppFileListParam param){
+    public static ListFiles appGetAllFileList(@NotNull AppFileListParam param) {
+        // 参数校验
         if (param.getPageSize() <= 0) param.setPageSize(200);
-        // 如果 家庭id 大于 0 并且 文件id为 -11 则把文件ID设置为 空
-        if (param.getFamilyId() > 0 && param.getFileId().equals("-11")) param.setFileId("");
+        if (param.getFamilyId() > 0 && "-11".equals(param.getFileId())) param.setFileId("");
+        // 获取初始文件列表
         var files = appFileList(param);
         if (files == null) throw new RuntimeException("文件列表为空");
-        // 此处获取的是当前目录下的文件列表 包括文件夹和文件
-        // 如果 fileList的count大于 pageSize 则需要分页获取 取余则 增加一页
         var fileList = files.getFileList();
-        if (fileList.getCount() > param.getPageSize()){
-            int pageNum = (int) Math.ceil((double) fileList.getCount() / param.getPageSize());
+        int totalFilesCount = fileList.getCount();
+        // 检查是否需要分页
+        if (totalFilesCount > param.getPageSize()) {
+            int pageNum = (int) Math.ceil((double) totalFilesCount / param.getPageSize());
             for (int i = 2; i <= pageNum; i++) {
                 param.setPageNum(i);
-                if (!Objects.isNull(fileList.getFile())) {
-                    fileList.getFile().addAll(appFileList(param).getFileList().getFile());
-                }
-                if (!Objects.isNull(fileList.getFolder())) {
-                    fileList.getFolder().addAll(appFileList(param).getFileList().getFolder());
+                var additionalFiles = appFileList(param).getFileList();
+                if (additionalFiles != null) {
+                    if (additionalFiles.getFile() != null) fileList.getFile().addAll(additionalFiles.getFile());
+                    if (additionalFiles.getFolder() != null) fileList.getFolder().addAll(additionalFiles.getFolder());
                 }
                 TimeUnit.MILLISECONDS.sleep(100);
             }
@@ -85,16 +84,16 @@ public class FileDirectory {
 
 
     //获取文件列表
-    public static ListFiles appFileList(@NotNull AppFileListParam param){
+    public static ListFiles appFileList(@NotNull AppFileListParam param) {
         Object[] formatArgs;
         var session = getSession();
         String sessionKey, sessionSecret, fullUrlPattern;
-        if (param.getFamilyId() <= 0){
+        if (param.getFamilyId() <= 0) {
             sessionKey = session.getSessionKey();
             sessionSecret = session.getSessionSecret();
             fullUrlPattern = "%s/listFiles.action?folderId=%s&recursive=0&fileType=0&iconOption=10&mediaAttr=0&orderBy=%s&descending=%s&pageNum=%s&pageSize=%s&%s";
             formatArgs = new Object[]{API_URL, param.getFileId(), OrderEnums.getByCode(param.getOrderBy()), false, param.getPageNum(), param.getPageSize(), PcClientInfoSuffixParam()};
-        }else {
+        } else {
             // 家庭云
             if (rootNode.equals(param.getFileId())) param.setFileId("");
             sessionKey = session.getFamilySessionKey();
@@ -108,7 +107,7 @@ public class FileDirectory {
 
     // 通过FileId获取文件的绝对路径
     @SneakyThrows
-    public static String appFilePathById(Integer familyId, String fileId){
+    public static String appFilePathById(Integer familyId, String fileId) {
         var fullPath = "";
         var param = AppGetFileInfoParam.builder()
                 .familyId(familyId)
@@ -116,9 +115,7 @@ public class FileDirectory {
         while (true) {
             var fi = appGetBasicFileInfo(param);
             if (fi == null) throw new RuntimeException("FileInfo is null");
-            if (!fi.getPath().isEmpty()) {
-                return fi.getPath();
-            }
+            if (!fi.getPath().isEmpty()) return fi.getPath();
             if (fi.getId().startsWith("-") || fi.getParentFolderId().startsWith("-")) {
                 fullPath = "/" + fullPath;
                 break;
@@ -133,7 +130,7 @@ public class FileDirectory {
     }
 
     // 通过FileId获取文件详情
-    public static AppFileEntity appFileInfoById(Integer familyId, String fileId){
+    public static AppFileEntity appFileInfoById(Integer familyId, String fileId) {
         var param = AppGetFileInfoParam.builder()
                 .familyId(familyId)
                 .fileId(fileId).build();
@@ -144,13 +141,13 @@ public class FileDirectory {
         var files = appGetAllFileList(build);
         var file = files.getFileList().getFile();
         if (file == null) throw new RuntimeException("文件列表为空");
-        var collect = convert(file,result.getPath(),result.getParentFolderId()).stream().filter(e -> e.getFileId().equals(fileId)).toList();
+        var collect = convert(file, result.getPath(), result.getParentFolderId()).stream().filter(e -> e.getFileId().equals(fileId)).toList();
         if (collect.isEmpty()) throw new RuntimeException("文件不存在");
         return collect.getFirst();
     }
 
     // 转换实体
-    private static List<AppFileEntity> convert( List<ListFiles.File> file,String path, String parentId){
+    private static List<AppFileEntity> convert(List<ListFiles.File> file, String path, String parentId) {
         return file.stream().map(e -> AppFileEntity.builder()
                 .fileId(e.getId())
                 .fileName(e.getName())
