@@ -7,13 +7,15 @@ import lombok.Data;
 @Builder
 public class AppFileListParam {
 
-    private int familyId;
+    @Builder.Default
+    private int familyId = 0;
 
     private String fileId;
 
     private int orderBy;
 
-    private String orderSort;
+    @Builder.Default
+    private String orderSort = "false";
 
     @Builder.Default
     private int pageNum = 1;
@@ -21,6 +23,7 @@ public class AppFileListParam {
     @Builder.Default
     private int pageSize = 60;
 
-    private boolean constructPath;
+    @Builder.Default
+    private boolean constructPath = false;
 
 }

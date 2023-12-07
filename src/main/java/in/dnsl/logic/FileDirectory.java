@@ -3,12 +3,10 @@ package in.dnsl.logic;
 import in.dnsl.domain.req.AppFileListParam;
 import in.dnsl.domain.req.AppGetFileInfoParam;
 import in.dnsl.domain.result.AppFileEntity;
-import in.dnsl.domain.result.AppFileListResult;
 import in.dnsl.domain.xml.AppErrorXmlResp;
 import in.dnsl.domain.xml.AppGetFileInfoResult;
 import in.dnsl.domain.xml.ListFiles;
 import in.dnsl.enums.OrderEnums;
-import in.dnsl.utils.JsonUtils;
 import in.dnsl.utils.XmlUtils;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +16,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -59,47 +58,31 @@ public class FileDirectory {
 
     // 获取指定目录下的所有文件列表
     @SneakyThrows
-    public static void appGetAllFileList(@NotNull AppFileListParam param){
+    public static ListFiles appGetAllFileList(@NotNull AppFileListParam param){
         if (param.getPageSize() <= 0) param.setPageSize(200);
         // 如果 家庭id 大于 0 并且 文件id为 -11 则把文件ID设置为 空
         if (param.getFamilyId() > 0 && param.getFileId().equals("-11")) param.setFileId("");
         var files = appFileList(param);
-        var build = AppFileListResult.builder()
-                .lastRev(files.getLastRev())
-                .count(files.getFileList().getFile().size())
-                .fileList(convert(files.getFileList().getFile())).build();
-        if (build.getCount() > param.getPageSize()){
-            // 如果文件数量大于每页数量，则递归获取
-            var pageNum = param.getPageNum();
-            var pageSize = param.getPageSize();
-            var totalPage = (int) Math.ceil((double) build.getCount() / pageSize);
-            for (int i = 1; i < totalPage; i++) {
-                param.setPageNum(++pageNum);
-                var fileList = appFileList(param);
-                build.getFileList().addAll(convert(fileList.getFileList().getFile()));
+        if (files == null) throw new RuntimeException("文件列表为空");
+        // 此处获取的是当前目录下的文件列表 包括文件夹和文件
+        // 如果 fileList的count大于 pageSize 则需要分页获取 取余则 增加一页
+        var fileList = files.getFileList();
+        if (fileList.getCount() > param.getPageSize()){
+            int pageNum = (int) Math.ceil((double) fileList.getCount() / param.getPageSize());
+            for (int i = 2; i <= pageNum; i++) {
+                param.setPageNum(i);
+                if (!Objects.isNull(fileList.getFile())) {
+                    fileList.getFile().addAll(appFileList(param).getFileList().getFile());
+                }
+                if (!Objects.isNull(fileList.getFolder())) {
+                    fileList.getFolder().addAll(appFileList(param).getFileList().getFolder());
+                }
                 TimeUnit.MILLISECONDS.sleep(100);
             }
         }
-        // 替换
-        build.getFileList().forEach(e-> e.setParentId(param.getFileId()));
-        // construct path
-        log.info("{}", JsonUtils.objectToJson(build));
+        return files;
     }
 
-    // 转换实体
-    private static List<AppFileEntity> convert( List<ListFiles.File> file){
-        return file.stream().map(e -> AppFileEntity.builder()
-                .fileId(e.getId())
-                .fileName(e.getName())
-                .fileSize(e.getSize())
-                .fileMd5(e.getMd5())
-                .startLabel(e.getStarLabel())
-                .fileCata(e.getFileCata())
-                .lastOpTime(e.getLastOpTime())
-                .createTime(e.getCreateDate())
-                .mediaType(e.getMediaType())
-                .rev(e.getRev()).build()).collect(Collectors.toList());
-    }
 
     //获取文件列表
     public static ListFiles appFileList(@NotNull AppFileListParam param){
@@ -150,13 +133,39 @@ public class FileDirectory {
     }
 
     // 通过FileId获取文件详情
-    public static void appFileInfoById(Integer familyId, String fileId){
+    public static AppFileEntity appFileInfoById(Integer familyId, String fileId){
         var param = AppGetFileInfoParam.builder()
                 .familyId(familyId)
                 .fileId(fileId).build();
         var result = appGetBasicFileInfo(param);
-
+        var build = AppFileListParam.builder()
+                .fileId(result.getParentFolderId())
+                .familyId(familyId).build();
+        var files = appGetAllFileList(build);
+        var file = files.getFileList().getFile();
+        if (file == null) throw new RuntimeException("文件列表为空");
+        var collect = convert(file,result.getPath(),result.getParentFolderId()).stream().filter(e -> e.getFileId().equals(fileId)).toList();
+        if (collect.isEmpty()) throw new RuntimeException("文件不存在");
+        return collect.getFirst();
     }
+
+    // 转换实体
+    private static List<AppFileEntity> convert( List<ListFiles.File> file,String path, String parentId){
+        return file.stream().map(e -> AppFileEntity.builder()
+                .fileId(e.getId())
+                .fileName(e.getName())
+                .fileSize(e.getSize())
+                .fileMd5(e.getMd5())
+                .startLabel(e.getStarLabel())
+                .fileCata(e.getFileCata())
+                .lastOpTime(e.getLastOpTime())
+                .createTime(e.getCreateDate())
+                .mediaType(e.getMediaType())
+                .path(path)
+                .parentId(parentId)
+                .rev(e.getRev()).build()).collect(Collectors.toList());
+    }
+
 
     private static String send(String fullUrlPattern, Object[] formatArgs, String sessionKey, String sessionSecret) {
         var fullUrl = String.format(fullUrlPattern, formatArgs);
