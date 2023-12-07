@@ -5,6 +5,7 @@ import in.dnsl.domain.req.AppGetFileInfoParam;
 import in.dnsl.domain.result.AppFileEntity;
 import in.dnsl.domain.xml.AppErrorXmlResp;
 import in.dnsl.domain.xml.AppGetFileInfoResult;
+import in.dnsl.domain.xml.FileSystemEntity;
 import in.dnsl.domain.xml.ListFiles;
 import in.dnsl.enums.OrderEnums;
 import in.dnsl.utils.XmlUtils;
@@ -30,6 +31,8 @@ public class FileDirectory {
 
     //根据文件ID或者文件绝对路径获取文件信息，支持文件和文件夹
     public static AppGetFileInfoResult appGetBasicFileInfo(@NotNull AppGetFileInfoParam build) {
+        if (build.getFamilyId() > 0 && "-11".equals(build.getFileId())) build.setFileId("");
+        if (build.getFilePath().isBlank() && build.getFileId().isBlank()) build.setFilePath("/");
         var session = getSession();
         String sessionKey, sessionSecret, fullUrlPattern;
         Object[] formatArgs;
@@ -145,6 +148,49 @@ public class FileDirectory {
         if (collect.isEmpty()) throw new RuntimeException("文件不存在");
         return collect.getFirst();
     }
+
+
+
+    // 递归获取文件夹下的所有文件 包括子文件夹
+    public static FileSystemEntity appFileListByPath(Integer familyId, String path) {
+        AppGetFileInfoParam fileInfoParam = AppGetFileInfoParam.builder()
+                .filePath(path).familyId(familyId).build();
+        AppGetFileInfoResult fileInfoResult = appGetBasicFileInfo(fileInfoParam);
+        if (fileInfoResult == null) throw new RuntimeException("文件不存在");
+
+        String folderId = fileInfoResult.getId();
+        AppFileListParam fileListParam = AppFileListParam.builder()
+                .fileId(folderId).familyId(familyId).build();
+        ListFiles listFiles = appGetAllFileList(fileListParam);
+
+        FileSystemEntity rootEntity = new FileSystemEntity(folderId, path, true);
+        processFileList(familyId, rootEntity, listFiles.getFileList(), path);
+        return rootEntity;
+    }
+
+    private static void processFileList(Integer familyId, FileSystemEntity parentEntity, ListFiles.FileList fileList, String parentPath) {
+        if (fileList == null) return;
+
+        // 处理子文件夹
+        if (fileList.getFolder() != null) {
+            for (ListFiles.Folder folder : fileList.getFolder()) {
+                String subFolderPath = parentPath + "/" + folder.getName();
+                FileSystemEntity subFolderEntity = appFileListByPath(familyId, subFolderPath);
+                parentEntity.addChild(subFolderEntity);
+            }
+        }
+
+        // 处理文件
+        if (fileList.getFile() != null) {
+            for (ListFiles.File file : fileList.getFile()) {
+                FileSystemEntity fileEntity = new FileSystemEntity(file.getId(), file.getName(), false);
+                parentEntity.addChild(fileEntity);
+            }
+        }
+    }
+
+
+
 
     // 转换实体
     private static List<AppFileEntity> convert(List<ListFiles.File> file, String path, String parentId) {
