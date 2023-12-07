@@ -15,8 +15,10 @@ import me.kuku.utils.OkHttpUtils;
 import okhttp3.Headers;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -30,7 +32,7 @@ import static in.dnsl.utils.SignatureUtils.signatureOfHmac;
 public class FileDirectory {
 
     //根据文件ID或者文件绝对路径获取文件信息，支持文件和文件夹
-    public static AppGetFileInfoResult appGetBasicFileInfo(@NotNull AppGetFileInfoParam build) {
+    public static AppGetFileInfoResult appGetBasicFileInfo(AppGetFileInfoParam build) {
         if (build.getFamilyId() > 0 && "-11".equals(build.getFileId())) build.setFileId("");
         if (build.getFilePath().isBlank() && build.getFileId().isBlank()) build.setFilePath("/");
         var session = getSession();
@@ -60,7 +62,7 @@ public class FileDirectory {
 
     // 获取指定目录下的所有文件列表
     @SneakyThrows
-    public static ListFiles appGetAllFileList(@NotNull AppFileListParam param) {
+    public static ListFiles appGetAllFileList(AppFileListParam param) {
         // 参数校验
         if (param.getPageSize() <= 0) param.setPageSize(200);
         if (param.getFamilyId() > 0 && "-11".equals(param.getFileId())) param.setFileId("");
@@ -87,7 +89,7 @@ public class FileDirectory {
 
 
     //获取文件列表
-    public static ListFiles appFileList(@NotNull AppFileListParam param) {
+    public static ListFiles appFileList(AppFileListParam param) {
         Object[] formatArgs;
         var session = getSession();
         String sessionKey, sessionSecret, fullUrlPattern;
@@ -153,19 +155,22 @@ public class FileDirectory {
 
     // 递归获取文件夹下的所有文件 包括子文件夹
     public static FileSystemEntity appFileListByPath(Integer familyId, String path) {
-        AppGetFileInfoParam fileInfoParam = AppGetFileInfoParam.builder()
+        var fileInfoParam = AppGetFileInfoParam.builder()
                 .filePath(path).familyId(familyId).build();
-        AppGetFileInfoResult fileInfoResult = appGetBasicFileInfo(fileInfoParam);
+        var fileInfoResult = appGetBasicFileInfo(fileInfoParam);
         if (fileInfoResult == null) throw new RuntimeException("文件不存在");
-
-        String folderId = fileInfoResult.getId();
-        AppFileListParam fileListParam = AppFileListParam.builder()
+        var folderId = fileInfoResult.getId();
+        var fileListParam = AppFileListParam.builder()
                 .fileId(folderId).familyId(familyId).build();
-        ListFiles listFiles = appGetAllFileList(fileListParam);
-
-        FileSystemEntity rootEntity = new FileSystemEntity(folderId, path, true);
-        processFileList(familyId, rootEntity, listFiles.getFileList(), path);
-        return rootEntity;
+        var listFiles = appGetAllFileList(fileListParam);
+        var resultData = FileSystemEntity.builder()
+                .isFolder(true)
+                .id(folderId)
+                .parentId(fileInfoResult.getParentFolderId())
+                .createDate(fileInfoResult.getCreateDate())
+                .name(path).build();
+        processFileList(familyId, resultData, listFiles.getFileList(), path);
+        return resultData;
     }
 
     private static void processFileList(Integer familyId, FileSystemEntity parentEntity, ListFiles.FileList fileList, String parentPath) {
@@ -179,21 +184,94 @@ public class FileDirectory {
                 parentEntity.addChild(subFolderEntity);
             }
         }
-
         // 处理文件
         if (fileList.getFile() != null) {
-            for (ListFiles.File file : fileList.getFile()) {
-                FileSystemEntity fileEntity = new FileSystemEntity(file.getId(), file.getName(), false);
-                parentEntity.addChild(fileEntity);
-            }
+            fileList.getFile().forEach(item -> parentEntity.addChild(createEntityFromFileInfo(item)));
         }
     }
 
+    public static CompletableFuture<FileSystemEntity> appFileListByPathAsync(Integer familyId, String path) {
+        return CompletableFuture.supplyAsync(() -> {
+            var fileInfoParam = AppGetFileInfoParam.builder()
+                    .filePath(path).familyId(familyId).build();
+            var fileInfoResult = appGetBasicFileInfo(fileInfoParam);
+            if (fileInfoResult == null) {
+                throw new RuntimeException("文件不存在");
+            }
+            String folderId = fileInfoResult.getId();
+            var fileListParam = AppFileListParam.builder()
+                    .fileId(folderId).familyId(familyId).build();
+            var listFiles = appGetAllFileList(fileListParam);
+            var resultData = FileSystemEntity.builder()
+                    .isFolder(true)
+                    .id(folderId)
+                    .parentId(fileInfoResult.getParentFolderId())
+                    .createDate(fileInfoResult.getCreateDate())
+                    .name(path).build();
+            processFileListAsync(familyId, resultData, listFiles.getFileList(), path).join();
+            return resultData;
+        });
+    }
 
+    private static CompletableFuture<Void> processFileListAsync(Integer familyId, FileSystemEntity parentEntity, ListFiles.FileList fileList, String parentPath) {
+        if (fileList == null) {
+            return CompletableFuture.completedFuture(null);
+        }
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
+        // 处理子文件夹
+        if (fileList.getFolder() != null) {
+            for (ListFiles.Folder folder : fileList.getFolder()) {
+                String subFolderPath = parentPath + "/" + folder.getName();
+                folder.setName(subFolderPath);
+                FileSystemEntity folderEntity = createEntityFromFolderInfo(folder); // 创建文件夹实体
+                CompletableFuture<Void> folderFuture = appFileListByPathAsync(familyId, subFolderPath)
+                        .thenAccept(subFolderEntity -> {
+                            folderEntity.getChildren().addAll(subFolderEntity.getChildren()); // 添加子实体
+                            parentEntity.addChild(folderEntity); // 将文件夹实体添加到父实体
+                        });
+                futures.add(folderFuture);
+            }
+        }
+        // 处理文件
+        if (fileList.getFile() != null) {
+            fileList.getFile().forEach(file -> parentEntity.addChild( createEntityFromFileInfo(file)));
+        }
+        return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
+    }
+
+    private static FileSystemEntity createEntityFromFileInfo(ListFiles.@NotNull File file) {
+        return FileSystemEntity.builder()
+                .id(file.getId())
+                .name(file.getName())
+                .isFolder(false)
+                .md5(file.getMd5())
+                .size(file.getSize())
+                .starLabel(file.getStarLabel())
+                .fileCata(file.getFileCata())
+                .lastOpTime(file.getLastOpTime())
+                .createDate(file.getCreateDate())
+                .mediaType(file.getMediaType())
+                .rev(file.getRev())
+                .build();
+    }
+
+    private static FileSystemEntity createEntityFromFolderInfo(ListFiles.@NotNull Folder folder) {
+        return FileSystemEntity.builder()
+                .id(folder.getId())
+                .name(folder.getName())
+                .isFolder(true)
+                .parentId(folder.getParentId())
+                .starLabel(folder.getStarLabel())
+                .fileCata(folder.getFileCata())
+                .lastOpTime(folder.getLastOpTime())
+                .createDate(folder.getCreateDate())
+                .rev(folder.getRev())
+                .build();
+    }
 
 
     // 转换实体
-    private static List<AppFileEntity> convert(List<ListFiles.File> file, String path, String parentId) {
+    private static List<AppFileEntity> convert(@NotNull List<ListFiles.File> file, String path, String parentId) {
         return file.stream().map(e -> AppFileEntity.builder()
                 .fileId(e.getId())
                 .fileName(e.getName())
