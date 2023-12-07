@@ -40,11 +40,17 @@
             <artifactId>xstream</artifactId>
             <version>1.4.20</version>
         </dependency>
+        <dependency>
+            <groupId>cn.hutool</groupId>
+            <artifactId>hutool-all</artifactId>
+            <version>5.8.23</version>
+        </dependency>
     </dependencies>
 
     <repositories>
         <repository>
-            <id>nexus</id>
+            <id>dnslin</id>
+            <name>dnslin_group</name>
             <url>https://nexus.dnsl.in/repository/repository_group/</url>
         </repository>
     </repositories>

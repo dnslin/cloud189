@@ -18,4 +18,7 @@ public class ApiConstant {
 
     public static final String CHANNEL_ID = "web_cloud.189.cn";
 
+    // / 根路径
+    public static final String rootNode = "-11";
+
 }

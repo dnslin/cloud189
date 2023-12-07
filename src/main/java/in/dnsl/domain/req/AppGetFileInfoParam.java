@@ -16,5 +16,6 @@ public class AppGetFileInfoParam {
     private String fileId = "";
 
     // FilePath 文件绝对路径，支持文件和文件夹
-    private String filePath;
+    @Builder.Default
+    private String filePath = "";
 }
