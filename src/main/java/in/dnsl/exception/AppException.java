@@ -1,5 +1,6 @@
 package in.dnsl.exception;
 
+import in.dnsl.enums.ResponseEnum;
 import lombok.Data;
 
 @Data
