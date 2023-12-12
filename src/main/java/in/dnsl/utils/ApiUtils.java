@@ -36,10 +36,4 @@ public class ApiUtils {
         return URLEncoder.encode(original, StandardCharsets.UTF_8);
     }
 
-    public static void main(String[] args) {
-        String s = dateOfGmtStr();
-        System.out.println(s);
-    }
-
-
 }
