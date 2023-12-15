@@ -217,14 +217,14 @@ public class FileDirectory {
         if (fileList == null) {
             return CompletableFuture.completedFuture(null);
         }
-        List<CompletableFuture<Void>> futures = new ArrayList<>();
+        var futures = new ArrayList<>();
         // 处理子文件夹
         if (fileList.getFolder() != null) {
             for (ListFiles.Folder folder : fileList.getFolder()) {
                 String subFolderPath = parentPath + "/" + folder.getName();
                 folder.setName(subFolderPath);
-                FileSystemEntity folderEntity = createEntityFromFolderInfo(folder); // 创建文件夹实体
-                CompletableFuture<Void> folderFuture = appFileListByPathAsync(familyId, subFolderPath)
+                var folderEntity = createEntityFromFolderInfo(folder); // 创建文件夹实体
+                var folderFuture = appFileListByPathAsync(familyId, subFolderPath)
                         .thenAccept(subFolderEntity -> {
                             folderEntity.getChildren().addAll(subFolderEntity.getChildren()); // 添加子实体
                             parentEntity.addChild(folderEntity); // 将文件夹实体添加到父实体
