@@ -32,7 +32,7 @@ public class FileCopy {
         );
         var xmlData = OkHttpUtils.postStr(fullUrl, new HashMap<>(), Headers.of(headers));
         if (xmlData.contains("FileAlreadyExists")) throw new AppException("文件已存在");
-        AppFileEntity appFileEntity = XmlUtils.xmlToObject(xmlData, AppFileEntity.class);
+        var appFileEntity = XmlUtils.xmlToObject(xmlData, AppFileEntity.class);
         log.info("{}", xmlData);
         log.info("{}", JsonUtils.objectToJson(appFileEntity));
     }

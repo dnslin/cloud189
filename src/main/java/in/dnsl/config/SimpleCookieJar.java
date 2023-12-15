@@ -18,19 +18,19 @@ public class SimpleCookieJar implements CookieJar {
 
     @Override
     public @NotNull List<Cookie> loadForRequest(HttpUrl url) {
-        List<Cookie> cookies = cookieStore.get(url.host());
+        var cookies = cookieStore.get(url.host());
         return cookies != null ? cookies : new ArrayList<>();
     }
 
     public static void setGlobalCookie(@NotNull String url, @NotNull String cookie) {
-        HttpUrl httpUrl = HttpUrl.parse(url);
-        Cookie cookies = new Cookie.Builder()
+        var httpUrl = HttpUrl.parse(url);
+        var cookies = new Cookie.Builder()
                 .name("COOKIE_LOGIN_USER")
                 .value(cookie)
                 .domain(Objects.requireNonNull(httpUrl).host())
                 .build();
         // 设置全局Cookie
-        List<Cookie> cookiesForHost = cookieStore.getOrDefault(httpUrl.host(), new ArrayList<>());
+        var cookiesForHost = cookieStore.getOrDefault(httpUrl.host(), new ArrayList<>());
         cookiesForHost.add(cookies);
         cookieStore.put(httpUrl.host(), cookiesForHost);
     }
